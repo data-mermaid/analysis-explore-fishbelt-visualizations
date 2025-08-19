@@ -1,0 +1,245 @@
+---
+title: "WCS MERMAID Fishbelt Explore Visualizations"
+author: "Iain R. Caldwell"
+date: 08/19/2025
+format: 
+  html: #for website
+    embed-resources: true
+editor: visual
+code-fold: true
+code-summary: "Show the code"
+toc: true
+title-block-banner: "#f0f3f5"
+title-block-banner-color: "black"
+include-after-body: "footer.html"
+---
+
+This code provides examples of visualizations shown on [MERMAID Explore](https://explore.datamermaid.org/) that use data from the fishbelt protocol.
+
+## Getting summary sample event data from MERMAID
+
+Download summary sample event data from [MERMAID](https://datamermaid.org), using the mermaidr package (documentation can be found at <https://data-mermaid.github.io/mermaidr/>).
+
+```{r}
+#| label: Load packages and download data
+#| warning: false
+rm(list = ls()) #remove past stored objects
+options(scipen = 999) #turn off scientific notation
+
+####  Load packages and libraries ####
+## If this is the first time using mermaidr, install the package through "remotes"
+# install.packages("remotes")
+# remotes::install_github("data-mermaid/mermaidr")
+# install.packages("tidyverse")
+# install.packages("plotly") 
+# install.packages("htmlwidgets")
+
+library(mermaidr) #package to download data from datamermaid.org
+library(tidyverse) #package that makes it easier to work with data
+library(plotly) #for interactive plotting
+library(htmlwidgets) #for saving plots at html files
+
+#### Get data from MERMAID for creating aggregate visualizations ####
+allMermaidSampEventsTBL <- mermaidr::mermaid_get_summary_sampleevents()
+```
+
+## Histogram - Fish biomass from summary sample events
+
+This code creates a histogram of the fish biomass data from all the sample events available with permissions of "public summary" or "public". It includes the total number of surveys (i.e. sample events in MERMAID) and truncates the data at 5000 kg/ha, with any surveys above that grouped into a single bar for "5000+".
+
+```{r}
+#| label: Histogram - Fish biomass from summary sample events
+
+### Fish biomass data - only use relevant data and truncate > 5000 kg/ha
+fishbeltSurveySummTBL <- allMermaidSampEventsTBL %>% 
+  filter(!is.na(beltfish_biomass_kgha_avg)) %>% 
+  mutate(truncBiomass = ifelse(test = beltfish_biomass_kgha_avg > 5000,
+                               yes = 5001,
+                               no = beltfish_biomass_kgha_avg))
+
+### Create the plot
+fishbeltAggHist <-
+  plot_ly(data = fishbeltSurveySummTBL,
+          x = ~truncBiomass,
+          type = 'histogram',
+          xbins = list(start = 0, size = 100),
+          marker = list(color = "#769fca"),
+          height = 450,
+          hovertemplate = paste('Bin: %{x} kg/ha',
+                          '<br>%{y} surveys',
+                          '<extra></extra>')) %>%
+  config(displayModeBar = TRUE,
+         displaylogo = FALSE,
+         modeBarButtonsToRemove = c('zoom','pan', 'select', 'zoomIn', 'zoomOut',
+                                    'autoScale', 'resetScale', 'lasso2d',
+                                    'hoverClosestCartesian', 'hoverCompareCartesian')) %>% 
+  layout(bargap = 0.1,
+         xaxis = list(title = "Fish biomass (kg/ha)",
+                      linecolor = "black",
+                      linewidth = 2,
+                      tickmode = "array",
+                      ticktext = list("0",
+                                      "1000",
+                                      "2000",
+                                      "3000",
+                                      "4000",
+                                      "5000+"),
+                      tickvals = list(0, 1000, 2000, 3000, 4000, 5000)),
+         yaxis = list(title = "Number of surveys",
+                      #type = 'log',
+                      linecolor = "black",   # Set the y-axis line color to black
+                      linewidth = 2),
+         annotations = list(
+           list(x = 0, y = 1.15, text = "FISH BIOMASS", showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 20)),
+           list(x = 0, y = 1.08,
+                text = paste0(length(fishbeltSurveySummTBL$beltfish_biomass_kgha_avg),
+                             " Surveys"),
+                showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 12))
+         ),
+         margin = list(t = 50, b = 75))  # Increase top margin to create more space for title and subtitle
+
+# Visualize the plot
+fishbeltAggHist
+```
+
+## Time series - Fish biomass by year and management
+
+Barplots showing the average fish biomass (y-axis), each year (x-axis), colored by management (open access = green, restrictions = blue). Note that here I am using a median rather than a mean since fish biomass tends to have a non-normal distribution.
+
+```{r}
+#| label: Time series - Fish biomass by year and management
+
+##  Get the fishbelt data and assign either "Open Access" or "Restrictions"
+fishbeltSurveyManagementTBL <- allMermaidSampEventsTBL %>%
+  filter(!is.na(beltfish_biomass_kgha_avg)) %>% 
+  mutate(open_access = case_when(management_rules == "open access" ~ "Open Access",
+                                 .default = "Restrictions"),
+         open_access = factor(open_access,
+                              levels = c("Restrictions", "Open Access")))
+
+## Summarize to get the biomass by year and management (open access vs restricted)
+fishbeltBiomassByYearManagementTBL <- fishbeltSurveyManagementTBL %>% 
+  mutate(year = year(sample_date)) %>% 
+  group_by(year, open_access) %>% 
+  dplyr::summarise(MedianFishBiomass = median(beltfish_biomass_kgha_avg),
+                   .groups = "keep") 
+
+managementColorMap <- setNames(
+  object = c("#E69F00", "#70AAE6"),
+  nm = c("Open Access", "Restrictions"))
+
+fishbeltTimeSeriesBarplot <- 
+  plot_ly(
+    data = fishbeltBiomassByYearManagementTBL,
+    x = ~year,
+    y = ~MedianFishBiomass,
+    color = ~open_access,
+    colors = managementColorMap,
+    type = 'bar',
+    hovertemplate = paste('%{fullData.name}',
+                          '<br>Year: %{x}',
+                          '<br>%{y:.0f} kg/ha',
+                          '<extra></extra>'), #Custom hover text
+    height = 450) %>%
+  config(displayModeBar = TRUE,
+         displaylogo = FALSE,
+         modeBarButtonsToRemove = c('zoom','pan', 'select', 'zoomIn', 'zoomOut',
+                                    'autoScale', 'resetScale', 'lasso2d',
+                                    'hoverClosestCartesian',
+                                    'hoverCompareCartesian')) %>% 
+  layout(bargap = 0.1,
+         xaxis = list(title = "Year",
+                      linecolor = "black",
+                      linewidth = 2),
+         yaxis = list(title = "Fish biomass (kg/ha)",
+                      linecolor = "black",   # Set the y-axis line color to black
+                      linewidth = 2),
+         annotations = list(
+           list(x = 0, y = 1.15, text = "FISH BIOMASS", showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 20)),
+           list(x = 0, y = 1.08,
+                text = paste(length(fishbeltSurveyManagementTBL$beltfish_biomass_kgha_avg),
+                             " Surveys"),
+                showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 12))
+         ),
+         legend = list(orientation = "h", xanchor = "center", x = 0.5, y = -0.2),
+         margin = list(t = 50, b = 75))  # Increase top margin to create more space for title and subtitle
+
+# Visualize the plot
+fishbeltTimeSeriesBarplot
+```
+
+## Barplot - Fish biomass by trophic group (single survey)
+
+Barplot showing fish biomass (y-axis) colored by trophic group (x-axis). This is an example with a single sample event (i.e. survey), but the code could easily be adapted to show averages across surveys or sites.
+
+```{r}
+#| label: Barplot - Fish biomass by trophic group (single survey)
+
+##  Get a single sample event that has biomass in each of the trophic groups as an example
+fishbeltSingleSeTBL <- allMermaidSampEventsTBL %>% 
+  filter(beltfish_biomass_kgha_avg > 0) %>% 
+  select(starts_with("beltfish_biomass_kgha_trophic_group_avg"),
+         beltfish_sample_unit_count) %>% 
+  select(-beltfish_biomass_kgha_trophic_group_avg_other) %>% #remove "Other"
+  replace(is.na(.), 0) #replace NA's with zeroes
+
+## create fixed label and color mapping for the trophic levels
+trophicLabels <- str_to_sentence(
+  gsub(x = colnames(fishbeltSingleSeTBL %>%
+                      select(-beltfish_sample_unit_count)),
+       pattern = "beltfish_biomass_kgha_trophic_group_avg_",
+       replacement = ""))
+
+trophicColorMap <- setNames(
+  object = c("#80cdc1", "#377eb8", "#bebada", "#fcae61", "#fdd92f", "#d9ed8b", "#4d9221", "#b4b4b4"),
+  nm = trophicLabels)
+
+fishbeltSingleSeBarplot <- 
+  plot_ly(x = trophicLabels,
+          y = as.numeric(fishbeltSingleSeTBL[1,colnames(fishbeltSingleSeTBL %>% select(-beltfish_sample_unit_count))]),
+          type = "bar",
+          color = trophicLabels,
+          colors = trophicColorMap,
+          marker = list(line = list(color = "black", width = 1)),
+          hovertemplate = paste('%{x}',
+                                '<br>%{y:.1f} kg/ha',
+                                '<extra></extra>'), #Custom hover text
+          height = 450) %>% 
+  config(displayModeBar = TRUE,
+         displaylogo = FALSE,
+         modeBarButtonsToRemove = c('zoom','pan', 'select', 'zoomIn', 'zoomOut',
+                                    'autoScale', 'resetScale', 'lasso2d',
+                                    'hoverClosestCartesian',
+                                    'hoverCompareCartesian')) %>% 
+  layout(showlegend = FALSE,
+         bargap = 0.1,
+         xaxis = list(title = "Trophic group",
+                      linecolor = "black",
+                      linewidth = 2, tickangle = -45),
+         yaxis = list(title = "Fish biomass (kg/ha)",
+                      linecolor = "black",   # Set the y-axis line color to black
+                      linewidth = 2),
+         annotations = list(
+           list(x = 0, y = 1.15, text = "FISH BIOMASS", showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 20)),
+           list(x = 0, y = 1.07,
+                text = paste0(fishbeltSingleSeTBL$beltfish_sample_unit_count[1],
+                             " sample units"),
+                showarrow = FALSE, 
+                xref = 'paper', yref = 'paper', xanchor = 'left', yanchor = 'top',
+                font = list(size = 12))
+         ),
+         margin = list(t = 50, b = 75))  # Increase top margin to create more space for title and subtitle
+
+# Visualize the plot
+fishbeltSingleSeBarplot
+```
