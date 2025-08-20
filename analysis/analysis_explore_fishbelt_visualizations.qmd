@@ -16,6 +16,8 @@ include-after-body: "footer.html"
 
 This code provides examples of visualizations shown on [MERMAID Explore](https://explore.datamermaid.org/) that use data from the fishbelt protocol.
 
+------------------------------------------------------------------------
+
 ## Getting summary sample event data from MERMAID
 
 Download summary sample event data from [MERMAID](https://datamermaid.org), using the mermaidr package (documentation can be found at <https://data-mermaid.github.io/mermaidr/>).
@@ -42,6 +44,8 @@ library(htmlwidgets) #for saving plots at html files
 #### Get data from MERMAID for creating aggregate visualizations ####
 allMermaidSampEventsTBL <- mermaidr::mermaid_get_summary_sampleevents()
 ```
+
+------------------------------------------------------------------------
 
 ## Histogram - Fish biomass from summary sample events
 
@@ -105,6 +109,8 @@ fishbeltAggHist <-
 # Visualize the plot
 fishbeltAggHist
 ```
+
+------------------------------------------------------------------------
 
 ## Time series - Fish biomass by year and management
 
@@ -175,6 +181,8 @@ fishbeltTimeSeriesBarplot <-
 # Visualize the plot
 fishbeltTimeSeriesBarplot
 ```
+
+------------------------------------------------------------------------
 
 ## Barplot - Fish biomass by trophic group (single survey)
 
