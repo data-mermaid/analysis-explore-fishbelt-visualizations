@@ -1,5 +1,5 @@
 ---
-title: "WCS MERMAID Fishbelt Explore Visualizations"
+title: "WCS MERMAID Explore - Fishbelt Visualizations"
 author: "Iain R. Caldwell"
 date: 08/19/2025
 format: 
